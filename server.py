@@ -4,7 +4,7 @@ import time
 import threading
 import qrcode
 from ledwand import Wallcomm
-from PIL import ImageEnhance
+from constants import *
 
 URL = "http://pixel-games.art/"
 WALLS = (10, )
@@ -16,6 +16,8 @@ if __name__ == '__main__':
     s = socket.socket(family=socket.AF_INET, type=socket.SOCK_STREAM)
     s.bind(('0.0.0.0', 1234))
     s.listen(10)
+
+    walls = Wallcomm(offsets=WALLS, brightness=BRIGHTNESS)
 
     running = True
 
@@ -37,8 +39,7 @@ if __name__ == '__main__':
                 qr_img = qr.make_image(fill_color='black', back_color='white').convert('RGB').crop((0, 0, 32, 32))
                 img = Image.new('RGB', (len(WALLS)*32, 32), color='black')
                 img.paste(qr_img, (0, 0, 32, 32))
-                wall = Wallcomm(offsets=WALLS)
-                wall.sendFrame(ImageEnhance.Brightness(img).enhance(BRIGHTNESS))
+                walls.sendFrame(img)
                 time.sleep(3)
             else:
                 try:
@@ -46,21 +47,31 @@ if __name__ == '__main__':
                     notify_queue()
                     playing_client.send("It's your turn. GO!\n".encode())
 
-                    game = Snake(wall_offsets=WALLS, brightness=BRIGHTNESS)
+                    game = Snake(width=len(WALLS)*32, height=32)
                     try:
                         def control():
                             while game.is_running():
-                                key = playing_client.recv(1)
-                                if key == b'a':
-                                    game.set_direction(DIRECTION_LEFT)
-                                elif key == b'd':
-                                    game.set_direction(DIRECTION_RIGHT)
-                                elif key == b'w':
-                                    game.set_direction(DIRECTION_UP)
-                                elif key == b's':
-                                    game.set_direction(DIRECTION_DOWN)
+                                try:
+                                    key = playing_client.recv(1)
+                                    if key == b'a':
+                                        game.keypress(KEY_LEFT)
+                                    elif key == b'd':
+                                        game.keypress(KEY_RIGHT)
+                                    elif key == b'w':
+                                        game.keypress(KEY_UP)
+                                    elif key == b's':
+                                        game.keypress(KEY_DOWN)
+                                except OSError:
+                                    break
+
+                        def frame_sending():
+                            while game.is_running():
+                                frame = game.get_frame()
+                                walls.sendFrame(frame)
+                                time.sleep(0.02)
 
                         threading.Thread(target=control).start()
+                        threading.Thread(target=frame_sending).start()
                         game.run()
                         game.stop()
                     except GameOverException:
