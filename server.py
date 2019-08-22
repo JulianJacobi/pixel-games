@@ -5,10 +5,24 @@ import threading
 import qrcode
 from ledwand import Wallcomm
 from constants import *
+from PIL import Image
+from exceptions import *
 
 URL = "http://pixel-games.art/"
 WALLS = (10, )
 BRIGHTNESS = 0.2
+
+GAMES = (
+    ('Snake', Snake),
+)
+
+
+class Client:
+
+    def __init__(self, sock, game):
+        self.socket = sock
+        self.game = game
+
 
 if __name__ == '__main__':
     queue = []
@@ -23,7 +37,7 @@ if __name__ == '__main__':
 
     def notify_queue():
         for c in queue:
-            c.send('You are on queue. Place: {}\n'.format(queue.index(client)+1).encode())
+            c.socket.send('You are on queue. Place: {}\n'.format(queue.index(c)+1).encode())
 
     def game_handling():
         while running:
@@ -45,14 +59,14 @@ if __name__ == '__main__':
                 try:
                     playing_client = queue.pop(0)
                     notify_queue()
-                    playing_client.send("It's your turn. GO!\n".encode())
+                    playing_client.socket.send("It's your turn. GO!\n".encode())
 
-                    game = Snake(width=len(WALLS)*32, height=32)
+                    game = playing_client.game(width=len(WALLS)*32, height=32)
                     try:
                         def control():
                             while game.is_running():
                                 try:
-                                    key = playing_client.recv(1)
+                                    key = playing_client.socket.recv(1)
                                     if key == b'a':
                                         game.keypress(KEY_LEFT)
                                     elif key == b'd':
@@ -76,17 +90,38 @@ if __name__ == '__main__':
                         game.stop()
                     except GameOverException:
                         game.stop()
-                    playing_client.send("\nGame Over! Score: {}".format(game.get_score()).encode())
-                    playing_client.close()
+                    playing_client.socket.send("\nGame Over! Score: {}".format(game.get_score()).encode())
+                    playing_client.socket.close()
                 except BrokenPipeError:
                     pass
 
     threading.Thread(target=game_handling).start()
 
+    def client_handling(client_socket):
+        client_socket.send(b'Which game do you want to play?\n')
+        for i, game in enumerate(GAMES):
+            client_socket.send('{:>2d} : {}\n'.format(i, game[0]).encode())
+        client_socket.send(b'\nPlease enter number and press [ENTER]: ')
+        while True:
+            choice = b""
+            while True:
+                char = client_socket.recv(1)
+                if char not in (b'\r', b'\n'):
+                    choice += char
+                else:
+                    break
+            choice = int(choice)
+            if choice < len(GAMES):
+                client = Client(sock=client_socket, game=GAMES[choice][1])
+                queue.append(client)
+                client_socket.send('You are on queue. Place: {}\n'.format(queue.index(client) + 1).encode())
+                break
+            else:
+                client_socket.send(b'Please choose a valid option: ')
+
     try:
         while True:
             client, address = s.accept()
-            queue.append(client)
-            client.send('You are on queue. Place: {}\n'.format(queue.index(client)+1).encode())
-    except KeyboardInterrupt:
+            threading.Thread(target=client_handling, args=(client,)).start()
+    except:
         running = False
