@@ -1,4 +1,4 @@
-from snake import *
+from games.snake import Snake
 import socket
 import time
 import threading

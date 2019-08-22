@@ -2,6 +2,8 @@ import time
 from PIL import Image
 from random import randint
 from constants import *
+from exceptions import *
+from games.prototype import Game
 
 
 DIRECTION_UP = 1
@@ -10,21 +12,15 @@ DIRECTION_LEFT = 2
 DIRECTION_RIGHT = -2
 
 
-class GameOverException(Exception):
-    pass
-
-
-class Snake:
+class Snake(Game):
 
     def __init__(self, width, height):
-        self.__width = width
-        self.__height = height
-        self.__snake = [(int(self.__width/2), int(self.__height/2))]
+        super().__init__(width, height)
+
+        self.__snake = [(int(self._width / 2), int(self._height / 2))]
         self.__direction = DIRECTION_UP
 
         self.__food = self.generate_food()
-
-        self.__running = True
 
         self.__direction_changed = False
 
@@ -37,14 +33,11 @@ class Snake:
         self.__steps = 0
         self.__snake_color = (255, 255, 255)
 
-    def is_running(self):
-        return self.__running
-
     def get_score(self):
         return self.__score
 
     def get_frame(self):
-        frame = Image.new('RGB', (self.__width, self.__height), color='black')
+        frame = Image.new('RGB', (self._width, self._height), color='black')
         pixels = frame.load()
 
         for element in self.__snake:
@@ -53,12 +46,12 @@ class Snake:
         pixels[self.__food[0], self.__food[1]] = (255, 0, 0)
 
         color = (127, 0, 127)
-        for i in range(self.__width):
+        for i in range(self._width):
             pixels[i, 0] = color
-            pixels[i, self.__height - 1] = color
-        for i in range(self.__height):
+            pixels[i, self._height - 1] = color
+        for i in range(self._height):
             pixels[0, i] = color
-            pixels[self.__width - 1, i] = color
+            pixels[self._width - 1, i] = color
         return frame
 
     def keypress(self, key):
@@ -82,31 +75,31 @@ class Snake:
 
     def generate_food(self):
         while True:
-            food = (randint(0, self.__width-3)+1, randint(0, self.__height-3)+1)
+            food = (randint(0, self._width - 3) + 1, randint(0, self._height - 3) + 1)
             if food not in self.__snake:
                 return food
 
     def step(self):
-        if self.__width + self.__height - (self.__steps - self.__last_interaction) < 20:
-            rest = self.__width + self.__height - (self.__steps - self.__last_interaction)
+        if self._width + self._height - (self.__steps - self.__last_interaction) < 20:
+            rest = self._width + self._height - (self.__steps - self.__last_interaction)
             factor = (100/20)*rest
             self.__snake_color = (255, int(factor), int(factor))
-        if self.__steps - self.__last_interaction > self.__width + self.__height:
+        if self.__steps - self.__last_interaction > self._width + self._height:
             self.stop()
         next_point = (1, 1)
         current_x = self.__snake[-1][0]
         current_y = self.__snake[-1][1]
         left_x = current_x-1
         if left_x < 1:
-            left_x = self.__width-2
+            left_x = self._width - 2
         right_x = current_x+1
-        if right_x > self.__width-2:
+        if right_x > self._width-2:
             right_x = 1
         top_y = current_y-1
         if top_y < 1:
-            top_y = self.__height-2
+            top_y = self._height - 2
         down_y = current_y+1
-        if down_y > self.__height-2:
+        if down_y > self._height-2:
             down_y = 1
         if self.__direction == DIRECTION_UP:
             next_point = (current_x, top_y)
@@ -118,7 +111,7 @@ class Snake:
             next_point = (right_x, current_y)
 
         if next_point in self.__snake:
-            self.__running = False
+            self._running = False
 
         self.__snake.append(next_point)
         self.__steps += 1
@@ -133,11 +126,8 @@ class Snake:
         self.__direction_changed = False
 
     def run(self):
-        while self.__running:
+        while self._running:
             self.step()
             time.sleep(1.0/self.__speed)
 
         raise GameOverException
-
-    def stop(self):
-        self.__running = False
